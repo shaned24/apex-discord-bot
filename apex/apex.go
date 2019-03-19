@@ -1,5 +1,9 @@
 package apex
 
+type PlayerReader interface {
+	GetPlayer(name string, platform string) (*Player, error)
+}
+
 type Player struct {
 	Name     string
 	Platform string

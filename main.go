@@ -25,11 +25,15 @@ func init() {
 	flag.Parse()
 }
 
+func GetPlayer(reader apex.PlayerReader) (*apex.Player, error) {
+	return reader.GetPlayer(PlayerName, Platform)
+}
+
 func main() {
 	renderer := &apex.MarkdownRenderer{}
 	trnClient := trn.NewTRNClient(TRNStatsUrl, APIKey)
 
-	player, _ := trnClient.Fetch(PlayerName, Platform)
+	player, _ := GetPlayer(trnClient)
 	markdownOutput, _ := renderer.Render(player)
 
 	fmt.Println(markdownOutput)

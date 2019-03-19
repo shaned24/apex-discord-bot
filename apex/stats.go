@@ -6,12 +6,8 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-type PlayerStatsFetcher interface {
-	Fetch(name string, platform string) (*Player, error)
-}
-
 type PlayerStatsRenderer interface {
-	Render(legend *Player) (string, error)
+	Render(player *Player) (string, error)
 }
 
 type MarkdownRenderer struct{}

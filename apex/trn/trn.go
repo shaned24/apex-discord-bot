@@ -4,56 +4,67 @@ import (
 	"apex_discord_bot/apex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 )
 
 type Client struct {
-	URL    string
-	APIKey string
+	URL        string
+	APIKey     string
+	HttpClient *http.Client
 }
 
 func NewTRNClient(url string, apiKey string) *Client {
 	return &Client{
-		URL:    url,
-		APIKey: apiKey,
+		URL:        url,
+		APIKey:     apiKey,
+		HttpClient: &http.Client{},
 	}
 }
 
-func (c *Client) Fetch(name string, platform string) (*apex.Player, error) {
-	client := &http.Client{}
-	req, _ := http.NewRequest("GET", fmt.Sprintf(c.URL, platform, name), nil)
-	req.Header.Set("TRN-Api-Key", c.APIKey)
-	resp, err := client.Do(req)
+func (c *Client) GetPlayer(name string, platform string) (*apex.Player, error) {
+	resp, err := c.sendRequest(platform, name)
 	if err != nil {
-		log.Fatalf("Bad: %v", err)
+		return nil, err
 	}
 
-	defer resp.Body.Close()
-
-	playerStats := &PlayerStats{
-		Name:     name,
-		Platform: "PC",
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(playerStats)
+	playerStats, err := c.newPlayerStatsFromResponse(name, resp)
 	if err != nil {
-		log.Fatalf("Bad: %v", err)
+		return nil, err
 	}
-
-	apexLegends := getLegends(playerStats)
 
 	return &apex.Player{
 		Name:     playerStats.Name,
 		Platform: playerStats.Platform,
-		Legends:  apexLegends,
+		Legends:  playerStats.GetLegends(),
 	}, nil
 }
 
-func getLegends(playerStats *PlayerStats) []*apex.Legend {
+func (c *Client) newPlayerStatsFromResponse(name string, resp *http.Response) (*PlayerStats, error) {
+	defer resp.Body.Close()
+	playerStats := &PlayerStats{
+		Name:     name,
+		Platform: "PC",
+	}
+	err := json.NewDecoder(resp.Body).Decode(playerStats)
+	return playerStats, err
+}
+
+func (c *Client) sendRequest(platform string, name string) (*http.Response, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf(c.URL, platform, name), nil)
+	req.Header.Set("TRN-Api-Key", c.APIKey)
+	return c.HttpClient.Do(req)
+}
+
+type PlayerStats struct {
+	Data     LegendData
+	Name     string
+	Platform string
+}
+
+func (p *PlayerStats) GetLegends() []*apex.Legend {
 	var apexLegends []*apex.Legend
-	for _, legend := range playerStats.Data.Children {
-		apexLegendStats := getLegendStats(legend)
+	for _, legend := range p.Data.Children {
+		apexLegendStats := legend.GetStats()
 
 		apexLegend := &apex.Legend{
 			Name:    legend.MetaData.Name,
@@ -67,25 +78,6 @@ func getLegends(playerStats *PlayerStats) []*apex.Legend {
 	return apexLegends
 }
 
-func getLegendStats(legend Legend) []*apex.LegendStatistic {
-	var apexLegendStats []*apex.LegendStatistic
-	for _, stat := range legend.Stats {
-		apexLegendStat := &apex.LegendStatistic{
-			Name:     stat.MetaData.Name,
-			Category: stat.MetaData.CategoryName,
-			Value:    stat.Value,
-		}
-		apexLegendStats = append(apexLegendStats, apexLegendStat)
-	}
-	return apexLegendStats
-}
-
-type PlayerStats struct {
-	Data     LegendData
-	Name     string
-	Platform string
-}
-
 type LegendData struct {
 	ID       string
 	Type     string
@@ -97,6 +89,19 @@ type Legend struct {
 	Type     string
 	MetaData LegendMeta
 	Stats    []LegendStats
+}
+
+func (l *Legend) GetStats() []*apex.LegendStatistic {
+	var apexLegendStats []*apex.LegendStatistic
+	for _, stat := range l.Stats {
+		apexLegendStat := &apex.LegendStatistic{
+			Name:     stat.MetaData.Name,
+			Category: stat.MetaData.CategoryName,
+			Value:    stat.Value,
+		}
+		apexLegendStats = append(apexLegendStats, apexLegendStat)
+	}
+	return apexLegendStats
 }
 
 type LegendMeta struct {
